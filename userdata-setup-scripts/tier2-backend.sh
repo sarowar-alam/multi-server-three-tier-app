@@ -100,7 +100,9 @@ echo "  Repository ready at ${APP_DIR}"
 # ── 4. Install backend dependencies ───────────────────────────────────────────
 echo "[4/6] Installing backend dependencies..."
 cd "${APP_DIR}/backend"
-npm ci --omit=dev --silent
+# npm ci requires package-lock.json (committed to repo).
+# --omit=dev skips devDependencies. Drop --silent so errors are visible.
+npm ci --omit=dev
 echo "  Dependencies installed."
 
 # ── 5. Write .env file ────────────────────────────────────────────────────────
