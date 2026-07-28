@@ -20,7 +20,7 @@ bash /tmp/setup-db.sh -Password="${DB_PASSWORD}"
 # =============================================================================
 #  VERIFY INSTALLATION — run these after SSM login:
 #
-#  $ aws ssm start-session --target <instance-id> --profile sarowar-ostad --region ap-south-1
+#  $ aws ssm start-session --target i-08bdf7bc8b9e860a0 --profile sarowar-ostad --region ap-south-1
 #
 #  Check setup completed:
 #    cat /etc/bmi-db-setup.done

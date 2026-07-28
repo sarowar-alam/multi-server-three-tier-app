@@ -58,6 +58,7 @@ if [ -n "${DB_PASSWORD_ARG}" ]; then
   # Password supplied directly via -Password= argument — no SSM needed.
   # This makes the script portable to any Ubuntu EC2 with outbound internet.
   DB_PASSWORD="${DB_PASSWORD_ARG}"
+  DB_PASSWORD_SOURCE="-Password argument"
   echo "  DB password provided via -Password argument."
 else
   # Fallback: fetch from AWS SSM Parameter Store (requires IAM instance profile)
@@ -73,6 +74,7 @@ else
     echo "ERROR: /bmi/db-password not found in SSM and no -Password supplied. Aborting." >&2
     exit 1
   fi
+  DB_PASSWORD_SOURCE="SSM /bmi/db-password"
   echo "  DB password fetched from SSM."
 fi
 
@@ -223,6 +225,6 @@ echo "  Database   : ${DB_NAME}"
 echo "  Role       : ${DB_USER}"
 echo "  VPC CIDR   : ${VPC_CIDR} (allowed in pg_hba.conf)"
 echo "  Listening  : 0.0.0.0:5432 (SG-guarded)"
-echo "  Password   : fetched from SSM /bmi/db-password"
+echo "  Password   : ${DB_PASSWORD_SOURCE}"
 echo "  Log        : /var/log/bmi-db-setup.log"
 echo "================================================================"
