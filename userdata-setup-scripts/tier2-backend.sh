@@ -56,6 +56,9 @@ fi
 DATABASE_URL="postgresql://bmi_user:${DB_PASSWORD}@${DB_HOST}:5432/bmi_health"
 APP_DIR="/opt/bmi-app"
 REPO_URL="https://github.com/sarowar-alam/multi-server-three-tier-app.git"
+# User data runs as root — pin PM2_HOME to root's home so startup
+# service and process list always use the same location.
+export PM2_HOME=/root/.pm2
 
 echo "  DB Host      : ${DB_HOST}"
 echo "  Frontend URL : ${FRONTEND_URL}"
@@ -148,8 +151,10 @@ fi
 
 # Persist PM2 process list so it survives reboots
 pm2 save
-# Generate and enable systemd startup script
-env PATH="$PATH:/usr/bin" pm2 startup systemd -u root --hp /root | tail -1 | bash
+# Generate and enable systemd startup unit (running as root, so no sudo needed).
+# Explicitly set PM2_HOME so the generated service uses /root/.pm2.
+env PATH="$PATH:/usr/bin" PM2_HOME=/root/.pm2 pm2 startup systemd -u root --hp /root
+systemctl enable pm2-root 2>/dev/null || true
 echo "  PM2 startup enabled."
 
 # ── Smoke test ────────────────────────────────────────────────────────────────

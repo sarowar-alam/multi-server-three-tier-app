@@ -13,7 +13,7 @@
 
 # ── Set these before launching ────────────────────────────────────────────────
 DB_PASSWORD="0stad2025"
-DB_HOST="10.0.10.34"         # Private IP of the DB server (Tier 3)
+DB_HOST="10.0.149.61"        # Private IP of the DB server (Tier 3)
 FRONTEND_URL="*"             # Or set to http://WEB_SERVER_IP when known
 # ─────────────────────────────────────────────────────────────────────────────
 
