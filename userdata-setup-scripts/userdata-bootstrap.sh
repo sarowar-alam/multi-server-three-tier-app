@@ -28,8 +28,8 @@ bash /tmp/setup-db.sh -Password="${DB_PASSWORD}"
 #  Check full install log:
 #    cat /var/log/bmi-db-setup.log
 #
-#  Check PostgreSQL is running:
-#    systemctl status postgresql
+#  Check PostgreSQL is running (real cluster service, not the meta wrapper):
+#    systemctl status postgresql@15-main.service
 #
 #  Check database and table exist:
 #    sudo -u postgres psql -d bmi_health -c '\dt'
