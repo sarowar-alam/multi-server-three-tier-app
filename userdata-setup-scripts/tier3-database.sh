@@ -21,12 +21,24 @@ echo "================================================================"
 echo " BMI DB Tier — setup started $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
 echo "================================================================"
 
+# ── Parse arguments ──────────────────────────────────────────────────────────
+# Usage: bash tier3-database.sh -Password="yourpassword"
+# If -Password is omitted the script falls back to AWS SSM /bmi/db-password.
+DB_PASSWORD_ARG=""
+for arg in "$@"; do
+  case $arg in
+    -Password=*|--Password=*)
+      DB_PASSWORD_ARG="${arg#*=}"
+      ;;
+  esac
+done
+
 # ── Static config ─────────────────────────────────────────────────────────────
 DB_NAME="bmi_health"
 DB_USER="bmi_user"
 PG_VERSION="15"
 
-# ── 0. Detect region + fetch DB password from SSM Parameter Store ─────────────
+# ── 0. Detect region + resolve DB password ────────────────────────────────────
 echo "[0/6] Detecting region via IMDSv2..."
 TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" \
   -H "X-aws-ec2-metadata-token-ttl-seconds: 60")
@@ -42,19 +54,27 @@ VPC_CIDR=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" \
   | head -1)
 echo "  VPC CIDR: ${VPC_CIDR}"
 
-echo "[0/6] Fetching DB password from SSM Parameter Store (/bmi/db-password)..."
-DB_PASSWORD=$(aws ssm get-parameter \
-  --name "/bmi/db-password" \
-  --with-decryption \
-  --query "Parameter.Value" \
-  --output text \
-  --region "${AWS_REGION}")
+if [ -n "${DB_PASSWORD_ARG}" ]; then
+  # Password supplied directly via -Password= argument — no SSM needed.
+  # This makes the script portable to any Ubuntu EC2 with outbound internet.
+  DB_PASSWORD="${DB_PASSWORD_ARG}"
+  echo "  DB password provided via -Password argument."
+else
+  # Fallback: fetch from AWS SSM Parameter Store (requires IAM instance profile)
+  echo "[0/6] No -Password argument — fetching from SSM (/bmi/db-password)..."
+  DB_PASSWORD=$(aws ssm get-parameter \
+    --name "/bmi/db-password" \
+    --with-decryption \
+    --query "Parameter.Value" \
+    --output text \
+    --region "${AWS_REGION}" 2>/dev/null || true)
 
-if [ -z "${DB_PASSWORD}" ]; then
-  echo "ERROR: Could not fetch /bmi/db-password from SSM. Aborting." >&2
-  exit 1
+  if [ -z "${DB_PASSWORD}" ]; then
+    echo "ERROR: /bmi/db-password not found in SSM and no -Password supplied. Aborting." >&2
+    exit 1
+  fi
+  echo "  DB password fetched from SSM."
 fi
-echo "  DB password fetched successfully."
 
 # ── 1. System update ──────────────────────────────────────────────────────────
 echo "[1/6] Updating system packages..."
