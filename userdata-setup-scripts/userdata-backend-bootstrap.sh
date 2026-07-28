@@ -34,12 +34,15 @@ bash /tmp/setup-backend.sh \
 #  Check full install log:
 #    cat /var/log/bmi-backend-setup.log
 #
-#  Check PM2 process is running:
-#    pm2 status
+#  Check PM2 process is running (app runs under root — always use sudo):
+#    sudo pm2 list --no-color
 #
-#  Check health endpoint:
+#  Check health endpoint (no DB needed):
 #    curl http://localhost:3000/health
 #
-#  Check PM2 app log:
-#    pm2 logs bmi-backend --lines 50
+#  Check API endpoint (requires DB connection):
+#    curl http://localhost:3000/api/measurements?limit=1
+#
+#  Check PM2 app log (sudo required):
+#    sudo pm2 logs bmi-backend --lines 50 --nostream
 # =============================================================================
