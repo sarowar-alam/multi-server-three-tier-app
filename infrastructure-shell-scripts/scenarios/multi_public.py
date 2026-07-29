@@ -2,12 +2,12 @@
 Case 2: Multi-server + public IPs, no domain  →  http://FRONTEND_IP
 Case 3: Multi-server + public IPs + domain    →  https://DOMAIN  (Let's Encrypt)
 
-Three separate EC2s, each in a public subnet:
-  DB       → 5432 from backend SG only
-  Backend  → 3000 from frontend SG only
-  Frontend → 80 / 443 from internet
+Architecture:
+  DB       → private subnet  (5432 from backend SG only, NAT for internet)
+  Backend  → private subnet  (3000 from frontend SG only, NAT for internet)
+  Frontend → public subnet   (80/443 from internet, public IP)
 
-Launch order is sequential because each tier's IP feeds the next:
+Launch order (each depends on the previous private IP):
   DB → wait running → Backend (with DB private IP) → wait running → Frontend (with Backend private IP)
 """
 import time
@@ -31,21 +31,22 @@ def deploy(args, session, state: DeployState) -> None:
     print(f"  Instance  : {args.instance_type}")
     print()
 
-    # ── Networking (public subnets only, no NAT) ──────────────────────────────
-    create_vpc_stack(ec2, state, with_nat=False, dry_run=dry)
+    # ── Networking: Frontend in public subnet, DB+Backend in private subnets ───
+    # NAT Gateway required so private instances can reach internet for apt/npm/git.
+    create_vpc_stack(ec2, state, with_nat=True, dry_run=dry)
 
     # ── Security groups ───────────────────────────────────────────────────────
     create_sgs(ec2, state, is_multi=True, is_alb=False, dry_run=dry)
 
-    # ── [1/3] Launch DB ───────────────────────────────────────────────────────
-    print("  [1/3] Launching Database tier…")
+    # ── [1/3] Launch DB (private subnet — no public IP) ───────────────────────
+    print("  [1/3] Launching Database tier (private subnet)…")
     state.instance_db = launch_instance(
         ec2, state,
         name="bmi-db",
-        subnet_id=state.public_subnet_ids[0],
+        subnet_id=state.private_subnet_ids[0],
         sg_ids=[state.sg_db],
         userdata=userdata.render_database(args.db_password),
-        public_ip=True,
+        public_ip=False,
         instance_type=args.instance_type,
         key_name=args.key_name,
         dry_run=dry,
@@ -56,22 +57,22 @@ def deploy(args, session, state: DeployState) -> None:
         db_private_ip = get_private_ip(ec2, state.instance_db)
         print(f"  [ec2] DB private IP: {db_private_ip}")
     else:
-        db_private_ip = "10.0.1.10"
+        db_private_ip = "10.0.11.10"
 
-    # ── [2/3] Launch Backend (needs DB IP) ────────────────────────────────────
-    print("  [2/3] Launching Backend tier…")
+    # ── [2/3] Launch Backend (private subnet — no public IP) ──────────────────
+    print("  [2/3] Launching Backend tier (private subnet)…")
     cors_url = f"https://{domain}" if domain else "*"
     state.instance_backend = launch_instance(
         ec2, state,
         name="bmi-backend",
-        subnet_id=state.public_subnet_ids[0],
+        subnet_id=state.private_subnet_ids[0],
         sg_ids=[state.sg_backend],
         userdata=userdata.render_backend(
             db_host=db_private_ip,
             db_password=args.db_password,
             frontend_url=cors_url,
         ),
-        public_ip=True,
+        public_ip=False,
         instance_type=args.instance_type,
         key_name=args.key_name,
         dry_run=dry,
@@ -82,7 +83,7 @@ def deploy(args, session, state: DeployState) -> None:
         backend_private_ip = get_private_ip(ec2, state.instance_backend)
         print(f"  [ec2] Backend private IP: {backend_private_ip}")
     else:
-        backend_private_ip = "10.0.1.20"
+        backend_private_ip = "10.0.11.20"
 
     # ── [3/3] Launch Frontend (needs Backend IP) ──────────────────────────────
     print("  [3/3] Launching Frontend tier…")
