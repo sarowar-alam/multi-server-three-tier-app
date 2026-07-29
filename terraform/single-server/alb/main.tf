@@ -39,7 +39,9 @@ module "single" {
     domain      = ""
     cert_email  = ""
   })
-  tags = local.common_tags
+  # Wait for NAT Gateway + private route table before launching (avoids race condition)
+  depends_on = [module.vpc]
+  tags       = local.common_tags
 }
 
 module "alb" {

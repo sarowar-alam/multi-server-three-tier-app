@@ -34,7 +34,8 @@ module "db" {
   iam_instance_profile = var.iam_instance_profile
   key_name             = var.key_name
   user_data = templatefile("${path.module}/userdata-db.tftpl", { db_password = var.db_password })
-  tags = local.common_tags
+  depends_on = [module.vpc]
+  tags       = local.common_tags
 }
 
 module "backend" {
@@ -51,7 +52,8 @@ module "backend" {
     db_host      = module.db.private_ip
     frontend_url = "*"
   })
-  tags = local.common_tags
+  depends_on = [module.vpc]
+  tags       = local.common_tags
 }
 
 module "frontend" {

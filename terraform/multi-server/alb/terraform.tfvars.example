@@ -1,8 +1,0 @@
-aws_profile     = "sarowar-ostad"
-region          = "ap-south-1"
-instance_type   = "t3.micro"
-db_password     = "CHANGE_ME"
-domain          = "bmi.ostaddevops.click"
-route53_zone_id = "Z1019653XLWIJ02C53P5"
-acm_cert_arn    = "arn:aws:acm:ap-south-1:388779989543:certificate/9eabfa2b-1b15-4b7a-beed-881e00ffe10d"
-key_name        = ""
