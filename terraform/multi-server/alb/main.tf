@@ -13,7 +13,7 @@ locals {
 }
 
 module "vpc" {
-  source   = "./modules/vpc"
+    source   = "./modules/vpc"
   with_nat = true
   tags     = local.common_tags
 }

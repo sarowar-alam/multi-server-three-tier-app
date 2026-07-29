@@ -11,9 +11,9 @@ locals {
 }
 
 module "vpc" {
-  source   = "./modules/vpc"
-  with_nat = true
-  tags     = local.common_tags
+    source   = "./modules/vpc"
+    with_nat = true
+    tags     = local.common_tags
 }
 
 module "sg" {
