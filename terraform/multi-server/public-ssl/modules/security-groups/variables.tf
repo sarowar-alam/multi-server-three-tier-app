@@ -1,6 +1,6 @@
 variable "vpc_id" {
   type = string
-}
+  }
 
 variable "with_alb" {
   type    = bool
