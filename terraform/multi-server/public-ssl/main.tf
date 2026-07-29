@@ -3,7 +3,11 @@
 
 locals {
   scenario    = "multi-server-public-ssl"
-  common_tags = { Project = "bmi-health-tracker"; Scenario = local.scenario; ManagedBy = "terraform" }
+  common_tags = {
+    Project   = "bmi-health-tracker"
+    Scenario  = local.scenario
+    ManagedBy = "terraform"
+  }
 }
 
 module "vpc" {
@@ -65,7 +69,6 @@ module "frontend" {
     domain       = var.domain
     cert_email   = var.cert_email
   })
-  depends_on = [module.route53]
   tags = local.common_tags
 }
 

@@ -3,13 +3,17 @@
 
 locals {
   scenario    = "single-server-public-http"
-  common_tags = { Project = "bmi-health-tracker"; Scenario = local.scenario; ManagedBy = "terraform" }
+  common_tags = {
+    Project   = "bmi-health-tracker"
+    Scenario  = local.scenario
+    ManagedBy = "terraform"
+  }
 }
 
 module "vpc" {
-  source   = "./modules/vpc"
-  with_nat = false
-  tags     = local.common_tags
+    source   = "./modules/vpc"
+    with_nat = false
+    tags     = local.common_tags
 }
 
 module "sg" {

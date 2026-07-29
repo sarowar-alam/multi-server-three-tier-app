@@ -1,5 +1,5 @@
-output "db_instance_id"       { value = aws_instance.db.id }
-output "backend_instance_id"  { value = aws_instance.backend.id }
-output "frontend_instance_id" { value = aws_instance.frontend.id }
-output "alb_dns"              { value = aws_lb.main.dns_name }
+output "db_instance_id"       { value = module.db.instance_id }
+output "backend_instance_id"  { value = module.backend.instance_id }
+output "frontend_instance_id" { value = module.frontend.instance_id }
+output "alb_dns"              { value = module.alb.alb_dns }
 output "access_url"           { value = "https://${var.domain}" }

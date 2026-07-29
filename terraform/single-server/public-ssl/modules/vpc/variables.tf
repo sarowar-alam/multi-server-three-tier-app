@@ -1,6 +1,17 @@
-variable "name_prefix" { type = string; default = "bmi" }
-variable "vpc_cidr"    { type = string; default = "10.0.0.0/16" }
-variable "with_nat"    { type = bool;   default = false }
+variable "name_prefix" {
+  type    = string
+  default = "bmi"
+}
+
+variable "vpc_cidr" {
+  type    = string
+  default = "10.0.0.0/16"
+}
+
+variable "with_nat" {
+  type    = bool
+  default = false
+}
 
 variable "public_subnets" {
   type = list(object({ cidr = string, az = string }))
@@ -18,4 +29,7 @@ variable "private_subnets" {
   ]
 }
 
-variable "tags" { type = map(string); default = {} }
+variable "tags" {
+  type    = map(string)
+  default = {}
+}

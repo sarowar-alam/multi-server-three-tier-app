@@ -3,13 +3,17 @@
 
 locals {
   scenario    = "single-server-public-ssl"
-  common_tags = { Project = "bmi-health-tracker"; Scenario = local.scenario; ManagedBy = "terraform" }
+  common_tags = {
+    Project   = "bmi-health-tracker"
+    Scenario  = local.scenario
+    ManagedBy = "terraform"
+  }  
 }
 
 module "vpc" {
-  source   = "./modules/vpc"
-  with_nat = false
-  tags     = local.common_tags
+    source   = "./modules/vpc"
+    with_nat = false
+    tags     = local.common_tags
 }
 
 module "sg" {
@@ -35,7 +39,6 @@ module "single" {
     domain      = var.domain
     cert_email  = var.cert_email
   })
-  depends_on = [module.route53]
   tags = local.common_tags
 }
 
