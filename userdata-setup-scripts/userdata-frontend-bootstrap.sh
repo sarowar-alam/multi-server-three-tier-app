@@ -40,13 +40,13 @@
 # ============================================================
 #  CONFIGURE HERE — change these variables before deploying
 # ============================================================
-MODE="alb"                   # alb  OR  public
+MODE="public"                   # alb  OR  public
 BACKEND_HOST="localhost"     # localhost  OR  10.0.x.x (backend private IP)
 DOMAIN=""                    # empty = plain HTTP
                              # yourdomain.com = Let's Encrypt HTTPS
                              #   (create Route53 A record -> EC2 public IP first)
-CERT_EMAIL="you@example.com" # email for Let's Encrypt registration (ignored if DOMAIN empty)
-DB_PASSWORD=""               # empty    = multi-server (frontend EC2 only)
+CERT_EMAIL="admin@ostaddevops.click" # email for Let's Encrypt registration (ignored if DOMAIN empty)
+DB_PASSWORD="0stad2025"               # empty    = multi-server (frontend EC2 only)
                              # "secret" = single-server: DB + Backend + Frontend
                              #            all installed on this EC2.
                              #            Only used when BACKEND_HOST=localhost.
