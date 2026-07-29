@@ -18,11 +18,12 @@
 #                      must be created manually before running the script.
 #
 #  3. Single-server + private subnet + ALB
-#       -Mode=alb  -BackendHost=localhost
-#       Node.js already installed by tier2-backend.sh is reused.
+#       -Mode=alb  -BackendHost=localhost  -DbPassword=secret
+#       tier3-database.sh + tier2-backend.sh are run automatically first.
+#       Node.js reused by frontend build (already installed by tier2).
 #
 #  4. Single-server + public IP (direct access)
-#       -Mode=public  -BackendHost=localhost
+#       -Mode=public  -BackendHost=localhost  -DbPassword=secret
 #       No domain  -> HTTP:80 only.
 #       With domain -> HTTPS:443 via Let's Encrypt.
 #
@@ -32,6 +33,9 @@
 #    -BackendPort=3000             default: 3000
 #    -Domain=yourdomain.com        optional; triggers Let's Encrypt when set
 #    -CertEmail=admin@example.com  Let's Encrypt registration email
+#    -DbPassword=secret            single-server only: set this to trigger
+#                                  automatic DB + Backend install on this EC2
+#                                  (ignored when BACKEND_HOST != localhost)
 #
 #  Logs -> /var/log/bmi-frontend-setup.log
 # =============================================================================
@@ -48,6 +52,7 @@ BACKEND_HOST="localhost"
 BACKEND_PORT="3000"
 DOMAIN=""
 CERT_EMAIL="admin@example.com"
+DB_PASSWORD=""   # set for single-server: triggers DB+Backend install
 
 for arg in "$@"; do
   case $arg in
@@ -56,6 +61,7 @@ for arg in "$@"; do
     -BackendPort=*|--BackendPort=*) BACKEND_PORT="${arg#*=}" ;;
     -Domain=*|--Domain=*)           DOMAIN="${arg#*=}"       ;;
     -CertEmail=*|--CertEmail=*)     CERT_EMAIL="${arg#*=}"   ;;
+    -DbPassword=*|--DbPassword=*)   DB_PASSWORD="${arg#*=}"  ;;
   esac
 done
 
@@ -90,6 +96,49 @@ AWS_REGION=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" \
 INSTANCE_IP=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" \
   http://169.254.169.254/latest/meta-data/local-ipv4)
 echo "  Region: ${AWS_REGION}  |  Private IP: ${INSTANCE_IP}"
+
+# ---- Single-server: install DB + Backend before frontend -------------------
+# Triggered when: BACKEND_HOST=localhost AND DB_PASSWORD is non-empty.
+# Downloads and runs tier3-database.sh then tier2-backend.sh in sequence,
+# so the user never needs to run the sed command or extra steps manually.
+if [ "${BACKEND_HOST}" = "localhost" ] && [ -n "${DB_PASSWORD}" ]; then
+  echo ""
+  echo "================================================================"
+  echo " Single-server mode: installing DB + Backend first"
+  echo "================================================================"
+
+  # Resolve the public IP so the backend .env gets the correct FRONTEND_URL
+  PUBLIC_IP=$(curl -s --max-time 3 -H "X-aws-ec2-metadata-token: ${TOKEN}" \
+    http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null || echo "")
+  if [ -n "${DOMAIN}" ]; then
+    FRONTEND_URL_BE="https://${DOMAIN}"
+  elif [ -n "${PUBLIC_IP}" ]; then
+    FRONTEND_URL_BE="http://${PUBLIC_IP}"
+  else
+    FRONTEND_URL_BE="*"
+  fi
+  echo "  CORS Frontend URL : ${FRONTEND_URL_BE}"
+
+  RAW_BASE="https://raw.githubusercontent.com/sarowar-alam/multi-server-three-tier-app/main/userdata-setup-scripts"
+
+  echo "[S1/3] Downloading and running tier3-database.sh..."
+  curl -fsSL "${RAW_BASE}/tier3-database.sh" -o /tmp/tier3-database.sh
+  chmod +x /tmp/tier3-database.sh
+  bash /tmp/tier3-database.sh -Password="${DB_PASSWORD}"
+  echo "[S1/3] Database setup complete."
+
+  echo "[S2/3] Downloading and running tier2-backend.sh..."
+  curl -fsSL "${RAW_BASE}/tier2-backend.sh" -o /tmp/tier2-backend.sh
+  chmod +x /tmp/tier2-backend.sh
+  bash /tmp/tier2-backend.sh \
+    -DbPassword="${DB_PASSWORD}" \
+    -DbHost="localhost" \
+    -FrontendUrl="${FRONTEND_URL_BE}"
+  echo "[S2/3] Backend setup complete."
+
+  echo "[S3/3] DB+Backend done. Continuing with Nginx + React build..."
+  echo "================================================================"
+fi
 
 # ---- 1. System update -------------------------------------------------------
 echo "[1/7] Updating system packages..."

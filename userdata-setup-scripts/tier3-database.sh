@@ -188,7 +188,9 @@ cat > "${PG_CONF_DIR}/pg_hba.conf" <<HBAEOF
 # Local superuser (maintenance on the DB host)
 local   all         postgres                    peer
 local   all         all                         peer
-# Allow App Tier connections within the VPC — AWS SG is the primary guard
+# Single-server: Node.js connects via TCP on localhost (eliminates manual sed)
+host    ${DB_NAME}  ${DB_USER}  127.0.0.1/32    scram-sha-256
+# Multi-server: App Tier connections within the VPC — AWS SG is the primary guard
 host    ${DB_NAME}  ${DB_USER}  ${VPC_CIDR}     scram-sha-256
 HBAEOF
 
