@@ -8,30 +8,43 @@
 #           script (tier1-frontend.sh) from GitHub and runs it.
 #
 #  USAGE:
-#    1. Change the three variables in the "CONFIGURE HERE" block below.
-#    2. Paste the entire file into EC2 → Advanced Details → User Data.
+#    1. Change the variables in the "CONFIGURE HERE" block below.
+#    2. Paste the entire file into EC2 -> Advanced Details -> User Data.
 #    3. Launch the instance.
 #
-#  ┌─────────────────────────────────────────────────────────────────────────┐
-#  │  Scenario                         MODE  BACKEND_HOST       DOMAIN      │
-#  │──────────────────────────────────────────────────────────────────────── │
-#  │  Multi-server + ALB               alb   10.0.x.x (BE IP)  (empty)     │
-#  │  Multi-server + public IP         public 10.0.x.x          (empty)     │
-#  │  Multi-server + Let's Encrypt     public 10.0.x.x          yourdomain  │
-#  │  Single-server (all on one EC2)   alb   localhost          (empty)     │
-#  └─────────────────────────────────────────────────────────────────────────┘
+#  +----------------------------------+--------+------------------+----------------------+
+#  | Scenario                         | MODE   | BACKEND_HOST     | DOMAIN               |
+#  +----------------------------------+--------+------------------+----------------------+
+#  | Multi-server + private + ALB     | alb    | 10.0.x.x (BE IP) | (empty)              |
+#  +----------------------------------+--------+------------------+----------------------+
+#  | Multi-server + public IP         | public | 10.0.x.x (BE IP) | (empty) = plain HTTP |
+#  |   no domain -> plain HTTP        |        |                  | yourdomain.com =     |
+#  |   domain   -> Let's Encrypt HTTPS|        |                  | Let's Encrypt HTTPS  |
+#  |   (Route53 A record -> public IP |        |                  | (set Route53 first)  |
+#  |    must exist before launch)     |        |                  |                      |
+#  +----------------------------------+--------+------------------+----------------------+
+#  | Single-server + private + ALB    | alb    | localhost        | (empty)              |
+#  +----------------------------------+--------+------------------+----------------------+
+#  | Single-server + public IP        | public | localhost        | (empty) = plain HTTP |
+#  |   no domain -> plain HTTP        |        |                  | yourdomain.com =     |
+#  |   domain   -> Let's Encrypt HTTPS|        |                  | Let's Encrypt HTTPS  |
+#  |   (Route53 A record -> public IP |        |                  | (set Route53 first)  |
+#  |    must exist before launch)     |        |                  |                      |
+#  +----------------------------------+--------+------------------+----------------------+
 #
 #  Logs  -> /var/log/bmi-frontend-setup.log
 #  Done  -> /etc/bmi-frontend-setup.done
 # =============================================================================
 
 # ============================================================
-#  CONFIGURE HERE — change these 4 variables before deploying
+#  CONFIGURE HERE — change these variables before deploying
 # ============================================================
 MODE="alb"                   # alb  OR  public
 BACKEND_HOST="localhost"     # localhost  OR  10.0.x.x (backend private IP)
-DOMAIN=""                    # empty  OR  yourdomain.com (Let's Encrypt only)
-CERT_EMAIL="you@example.com" # email for Let's Encrypt registration
+DOMAIN=""                    # empty = plain HTTP
+                             # yourdomain.com = Let's Encrypt HTTPS
+                             #   (create Route53 A record -> EC2 public IP first)
+CERT_EMAIL="you@example.com" # email for Let's Encrypt registration (ignored if DOMAIN empty)
 # ============================================================
 
 SCRIPT_URL="https://raw.githubusercontent.com/sarowar-alam/multi-server-three-tier-app/main/userdata-setup-scripts/tier1-frontend.sh"
@@ -58,17 +71,15 @@ bash /tmp/tier1-frontend.sh ${ARGS}
 #  # View setup log:
 #    sudo tail -100 /var/log/bmi-frontend-setup.log
 #
-#  # Test Nginx (ALB mode):
+#  # Test Nginx (ALB mode OR public mode with no domain -- plain HTTP):
 #    curl -s -o /dev/null -w "%{http_code}" http://localhost/
 #    # Expected: 200
 #
-#  # Test Nginx (public/selfsigned mode):
-#    curl -s -o /dev/null -w "%{http_code}" http://localhost/
-#    # Expected: 301
-#    curl -sk -o /dev/null -w "%{http_code}" https://localhost/
+#  # Test Nginx (public mode + domain -- Let's Encrypt HTTPS):
+#    curl -s -o /dev/null -w "%{http_code}" https://yourdomain.com/
 #    # Expected: 200
 #
-#  # Test API proxy (replace 10.0.x.x with actual frontend private IP or localhost):
+#  # Test API proxy:
 #    curl http://localhost/api/measurements?limit=1
 #    # Expected: {"rows":[...]}
 #

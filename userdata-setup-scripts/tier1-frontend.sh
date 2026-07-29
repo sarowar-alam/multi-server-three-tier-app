@@ -4,26 +4,33 @@
 #  Application : BMI Health Tracker
 #  OS          : Ubuntu 22.04 / 24.04 LTS
 #
-#  Handles all 4 deployment scenarios via -Mode and -BackendHost:
+#  Handles all 4 deployment scenarios:
 #
-#    -Mode=alb    Nginx serves HTTP:80 only. ALB terminates SSL upstream.
-#                 ALB + ACM certificate setup is manual (AWS Console/CLI).
+#  1. Multi-server + private subnet + ALB
+#       -Mode=alb  -BackendHost=10.0.x.x
+#       Nginx: HTTP:80 only. ALB terminates HTTPS + ACM cert (manual in AWS).
 #
-#    -Mode=public Nginx handles SSL on :443, redirects HTTP:80 -> HTTPS.
-#                 -CertMode=selfsigned  openssl cert (works with IP, browser warns)
-#                 -CertMode=letsencrypt certbot cert (needs a real domain)
+#  2. Multi-server + public IP (direct access)
+#       -Mode=public  -BackendHost=10.0.x.x
+#       No domain  -> Nginx: HTTP:80 only (no certificate).
+#       With domain -> Nginx: HTTPS:443 via Let's Encrypt (certbot).
+#                      Route53 A record pointing to this EC2's public IP
+#                      must be created manually before running the script.
 #
-#  Single-server (frontend + backend + DB on one EC2):
-#    Pass -BackendHost=localhost  — script reuses Node.js if already installed.
+#  3. Single-server + private subnet + ALB
+#       -Mode=alb  -BackendHost=localhost
+#       Node.js already installed by tier2-backend.sh is reused.
+#
+#  4. Single-server + public IP (direct access)
+#       -Mode=public  -BackendHost=localhost
+#       No domain  -> HTTP:80 only.
+#       With domain -> HTTPS:443 via Let's Encrypt.
 #
 #  Parameters:
 #    -Mode=alb|public              REQUIRED
 #    -BackendHost=IP|localhost     default: localhost
 #    -BackendPort=3000             default: 3000
-#    -Domain=yourdomain.com        required for -CertMode=letsencrypt
-#    -CertMode=letsencrypt|selfsigned
-#                                  auto-detected: letsencrypt if -Domain set,
-#                                  selfsigned otherwise (public mode only)
+#    -Domain=yourdomain.com        optional; triggers Let's Encrypt when set
 #    -CertEmail=admin@example.com  Let's Encrypt registration email
 #
 #  Logs -> /var/log/bmi-frontend-setup.log
@@ -40,7 +47,6 @@ MODE=""
 BACKEND_HOST="localhost"
 BACKEND_PORT="3000"
 DOMAIN=""
-CERT_MODE=""
 CERT_EMAIL="admin@example.com"
 
 for arg in "$@"; do
@@ -49,7 +55,6 @@ for arg in "$@"; do
     -BackendHost=*|--BackendHost=*) BACKEND_HOST="${arg#*=}" ;;
     -BackendPort=*|--BackendPort=*) BACKEND_PORT="${arg#*=}" ;;
     -Domain=*|--Domain=*)           DOMAIN="${arg#*=}"       ;;
-    -CertMode=*|--CertMode=*)       CERT_MODE="${arg#*=}"    ;;
     -CertEmail=*|--CertEmail=*)     CERT_EMAIL="${arg#*=}"   ;;
   esac
 done
@@ -62,25 +67,19 @@ if [[ "${MODE}" != "alb" && "${MODE}" != "public" ]]; then
   echo "ERROR: -Mode must be 'alb' or 'public', got '${MODE}'" >&2; exit 1
 fi
 
-# Auto-detect CertMode for public mode
-if [ "${MODE}" = "public" ] && [ -z "${CERT_MODE}" ]; then
-  CERT_MODE="$( [ -n "${DOMAIN}" ] && echo letsencrypt || echo selfsigned )"
-fi
-
-if [ "${MODE}" = "public" ] && [ "${CERT_MODE}" = "letsencrypt" ] && [ -z "${DOMAIN}" ]; then
-  echo "ERROR: -Domain is required when -CertMode=letsencrypt" >&2; exit 1
-fi
-
 APP_DIR="/opt/bmi-app"
 DIST_DIR="/var/www/bmi-app/dist"
 REPO_URL="https://github.com/sarowar-alam/multi-server-three-tier-app.git"
 NGINX_CONF="/etc/nginx/sites-available/bmi-app"
-SSL_DIR="/etc/ssl/bmi-app"
 
 echo "  Mode         : ${MODE}"
 echo "  Backend      : ${BACKEND_HOST}:${BACKEND_PORT}"
-echo "  Domain       : ${DOMAIN:-none}"
-echo "  Cert mode    : ${CERT_MODE:-n/a (alb mode)}"
+echo "  Domain       : ${DOMAIN:-none (plain HTTP)}"
+if [ "${MODE}" = "public" ]; then
+  [ -n "${DOMAIN}" ] \
+    && echo "  SSL          : Let's Encrypt (certbot)" \
+    || echo "  SSL          : none (plain HTTP, no domain provided)"
+fi
 
 # ---- 0. Detect region + instance IP via IMDSv2 ------------------------------
 echo "[0/7] Detecting region via IMDSv2..."
@@ -113,8 +112,8 @@ fi
 echo "[3/7] Installing Nginx..."
 apt-get install -y -qq nginx
 
-if [ "${MODE}" = "public" ] && [ "${CERT_MODE}" = "letsencrypt" ]; then
-  echo "  Installing certbot..."
+if [ "${MODE}" = "public" ] && [ -n "${DOMAIN}" ]; then
+  echo "  Installing certbot (domain set: ${DOMAIN})..."
   apt-get install -y -qq certbot python3-certbot-nginx
 fi
 
@@ -173,11 +172,11 @@ cat > /etc/nginx/snippets/bmi-proxy.conf <<PROXY
     location ~ /\. { deny all; }
 PROXY
 
-# ---- ALB mode: HTTP:80 only, no SSL logic in Nginx --------------------------
-if [ "${MODE}" = "alb" ]; then
+# ---- ALB mode OR public-no-domain: HTTP:80 only ----------------------------
+if [ "${MODE}" = "alb" ] || { [ "${MODE}" = "public" ] && [ -z "${DOMAIN}" ]; }; then
+  LABEL="$( [ "${MODE}" = "alb" ] && echo 'ALB mode -- ALB handles HTTPS + ACM certificate' || echo 'Public mode, no domain -- plain HTTP' )"
   cat > "${NGINX_CONF}" <<NGINXEOF
-# BMI Health Tracker -- ALB mode
-# Nginx: HTTP:80 only.  ALB handles HTTPS + ACM certificate.
+# BMI Health Tracker -- ${LABEL}
 server {
     listen 80 default_server;
     server_name _;
@@ -192,52 +191,11 @@ server {
     include /etc/nginx/snippets/bmi-proxy.conf;
 }
 NGINXEOF
-  echo "  Nginx ALB config written."
+  echo "  Nginx HTTP:80 config written (${MODE})."
 fi
 
-# ---- Public mode: self-signed certificate -----------------------------------
-if [ "${MODE}" = "public" ] && [ "${CERT_MODE}" = "selfsigned" ]; then
-  echo "  Generating self-signed certificate..."
-  mkdir -p "${SSL_DIR}"
-  openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
-    -keyout "${SSL_DIR}/key.pem" \
-    -out    "${SSL_DIR}/cert.pem" \
-    -subj   "/C=BD/ST=Dhaka/L=Dhaka/O=BMIApp/CN=${DOMAIN:-${INSTANCE_IP}}" \
-    2>/dev/null
-  echo "  Self-signed certificate created (valid 10 years)."
-
-  cat > "${NGINX_CONF}" <<NGINXEOF
-# BMI Health Tracker -- Public mode, self-signed SSL
-server {
-    listen 80 default_server;
-    server_name _;
-    return 301 https://\$host\$request_uri;
-}
-server {
-    listen 443 ssl default_server;
-    server_name ${DOMAIN:-_};
-
-    ssl_certificate     ${SSL_DIR}/cert.pem;
-    ssl_certificate_key ${SSL_DIR}/key.pem;
-    ssl_protocols       TLSv1.2 TLSv1.3;
-    ssl_ciphers         HIGH:!aNULL:!MD5;
-    ssl_prefer_server_ciphers on;
-
-    add_header Strict-Transport-Security "max-age=63072000" always;
-    add_header X-Frame-Options           "SAMEORIGIN"       always;
-    add_header X-Content-Type-Options    "nosniff"          always;
-
-    root  ${DIST_DIR};
-    index index.html;
-
-    include /etc/nginx/snippets/bmi-proxy.conf;
-}
-NGINXEOF
-  echo "  Nginx self-signed SSL config written."
-fi
-
-# ---- Public mode: Let's Encrypt certificate ---------------------------------
-if [ "${MODE}" = "public" ] && [ "${CERT_MODE}" = "letsencrypt" ]; then
+# ---- Public mode + domain: Let's Encrypt certificate -----------------------
+if [ "${MODE}" = "public" ] && [ -n "${DOMAIN}" ]; then
   # Write HTTP-only config first so certbot can complete ACME HTTP-01 challenge
   cat > "${NGINX_CONF}" <<NGINXEOF
 # BMI Health Tracker -- Public mode, Let's Encrypt (pre-certbot)
@@ -275,20 +233,13 @@ echo "  Nginx restarted."
 echo "[7/7] Smoke test..."
 sleep 2
 
-if [ "${MODE}" = "alb" ]; then
+if [ "${MODE}" = "alb" ] || { [ "${MODE}" = "public" ] && [ -z "${DOMAIN}" ]; }; then
   CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost/)
   [ "${CODE}" = "200" ] && echo "  PASSED -- HTTP:80 returned 200." \
     || echo "  WARNING: HTTP:80 returned ${CODE}"
 fi
 
-if [ "${MODE}" = "public" ] && [ "${CERT_MODE}" = "selfsigned" ]; then
-  R=$(curl -s -o /dev/null -w "%{http_code}" http://localhost/)
-  S=$(curl -sk -o /dev/null -w "%{http_code}" https://localhost/)
-  echo "  HTTP:80 -> ${R} (expect 301)"
-  echo "  HTTPS:443 -> ${S} (expect 200)"
-fi
-
-if [ "${MODE}" = "public" ] && [ "${CERT_MODE}" = "letsencrypt" ]; then
+if [ "${MODE}" = "public" ] && [ -n "${DOMAIN}" ]; then
   S=$(curl -s -o /dev/null -w "%{http_code}" "https://${DOMAIN}/")
   echo "  HTTPS://${DOMAIN}/ -> ${S} (expect 200)"
 fi
@@ -300,7 +251,7 @@ mode=${MODE}
 backend_host=${BACKEND_HOST}
 backend_port=${BACKEND_PORT}
 domain=${DOMAIN:-none}
-cert_mode=${CERT_MODE:-n/a}
+ssl=$( [ "${MODE}" = "public" ] && { [ -n "${DOMAIN}" ] && echo letsencrypt || echo none; } || echo n/a-alb )
 region=${AWS_REGION}
 dist_dir=${DIST_DIR}
 MARKER
@@ -311,8 +262,13 @@ echo " Web Tier setup COMPLETE $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
 echo "  Mode         : ${MODE}"
 echo "  Backend      : ${BACKEND_HOST}:${BACKEND_PORT}"
 if [ "${MODE}" = "public" ]; then
-echo "  SSL          : ${CERT_MODE}"
-echo "  Domain/IP    : ${DOMAIN:-${INSTANCE_IP}}"
+  if [ -n "${DOMAIN}" ]; then
+    echo "  SSL          : Let's Encrypt"
+    echo "  Domain       : ${DOMAIN}"
+  else
+    echo "  SSL          : none (plain HTTP)"
+    echo "  IP           : ${INSTANCE_IP}"
+  fi
 fi
 echo "  Dist         : ${DIST_DIR}"
 echo "  Log          : /var/log/bmi-frontend-setup.log"
