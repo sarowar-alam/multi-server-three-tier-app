@@ -45,3 +45,13 @@ coverage/
 # ── Misc ──────────────────────────────────────────────────────
 *.tgz
 *.zip
+
+# ── Python ────────────────────────────────────────────────────
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+*.egg-info/
+.eggs/
+dist/
+infrastructure-shell-scripts/deploy-state.json
