@@ -1,0 +1,10 @@
+#!/bin/bash
+set -euo pipefail
+exec > >(tee -a /var/log/bmi-userdata.log) 2>&1
+echo "[userdata] BMI database setup starting $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+
+RAW="https://raw.githubusercontent.com/sarowar-alam/multi-server-three-tier-app/main/userdata-setup-scripts"
+
+curl -fsSL "$${RAW}/tier3-database.sh" -o /tmp/tier3-database.sh
+chmod +x /tmp/tier3-database.sh
+bash /tmp/tier3-database.sh -Password="${db_password}"

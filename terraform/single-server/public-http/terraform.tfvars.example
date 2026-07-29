@@ -1,0 +1,8 @@
+# Copy this file to terraform.tfvars and fill in your values.
+# terraform.tfvars is gitignored — never commit real passwords.
+
+aws_profile   = "sarowar-ostad"
+region        = "ap-south-1"
+instance_type = "t3.micro"
+db_password   = "CHANGE_ME"
+key_name      = ""           # optional — leave empty to use SSM only

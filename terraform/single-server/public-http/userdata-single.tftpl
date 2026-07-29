@@ -1,0 +1,19 @@
+#!/bin/bash
+set -euo pipefail
+exec > >(tee -a /var/log/bmi-userdata.log) 2>&1
+echo "[userdata] BMI single-server setup starting $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+
+RAW="https://raw.githubusercontent.com/sarowar-alam/multi-server-three-tier-app/main/userdata-setup-scripts"
+
+curl -fsSL "$${RAW}/tier1-frontend.sh" -o /tmp/tier1-frontend.sh
+chmod +x /tmp/tier1-frontend.sh
+
+ARGS="-Mode=${mode} -BackendHost=localhost -DbPassword=${db_password}"
+%{ if domain != "" ~}
+ARGS="$ARGS -Domain=${domain}"
+%{ endif ~}
+%{ if cert_email != "" ~}
+ARGS="$ARGS -CertEmail=${cert_email}"
+%{ endif ~}
+
+bash /tmp/tier1-frontend.sh $ARGS

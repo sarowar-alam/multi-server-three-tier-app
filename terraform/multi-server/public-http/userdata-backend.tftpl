@@ -1,0 +1,13 @@
+#!/bin/bash
+set -euo pipefail
+exec > >(tee -a /var/log/bmi-userdata.log) 2>&1
+echo "[userdata] BMI backend setup starting $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+
+RAW="https://raw.githubusercontent.com/sarowar-alam/multi-server-three-tier-app/main/userdata-setup-scripts"
+
+curl -fsSL "$${RAW}/tier2-backend.sh" -o /tmp/tier2-backend.sh
+chmod +x /tmp/tier2-backend.sh
+bash /tmp/tier2-backend.sh \
+  -DbPassword="${db_password}" \
+  -DbHost="${db_host}" \
+  -FrontendUrl="${frontend_url}"

@@ -55,3 +55,17 @@ __pycache__/
 .eggs/
 dist/
 infrastructure-shell-scripts/deploy-state.json
+
+# ── Terraform ─────────────────────────────────────────────────
+**/.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfstate.lock.info
+.terraform.lock.hcl
+terraform.tfvars
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+crash.log
+crash.*.log

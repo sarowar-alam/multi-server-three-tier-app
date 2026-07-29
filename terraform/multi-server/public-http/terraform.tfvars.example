@@ -1,0 +1,5 @@
+aws_profile   = "sarowar-ostad"
+region        = "ap-south-1"
+instance_type = "t3.micro"
+db_password   = "CHANGE_ME"
+key_name      = ""
