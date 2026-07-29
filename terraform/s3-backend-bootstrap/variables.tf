@@ -5,7 +5,3 @@ variable "bucket_name" {
   type    = string
   default = "bmi-health-tracker-tfstate"
 }
-variable "dynamodb_table_name" {
-  type    = string
-  default = "bmi-tf-locks"
-}

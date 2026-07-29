@@ -15,7 +15,6 @@ terraform {
 #     bucket         = "bmi-health-tracker-tfstate"
 #     key            = "single-server/public-http/terraform.tfstate"
 #     region         = "ap-south-1"
-#     dynamodb_table = "bmi-tf-locks"
 #     encrypt        = true
 #     profile        = "sarowar-ostad"
 #   }
