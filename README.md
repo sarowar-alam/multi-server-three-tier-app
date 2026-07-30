@@ -92,7 +92,7 @@ Three instances (DB, Backend, Frontend) in private subnets, built **in that orde
 
 **On the DB instance and Backend instance:** run exactly the same commands as [Case 2](#case-2--multi-server-public-ip-no-domain) below, except set `FRONTEND_URL` in the backend's `.env` to the domain the ALB will serve (e.g. `https://yourdomain.com`) instead of a public IP.
 
-**On the Frontend instance:** same as Case 2's frontend steps, but the Nginx config stays **plain HTTP on port 80 only** — the ALB handles HTTPS, so no certbot is installed here:
+**On the Frontend instance:** same as [Case 2](#case-2--multi-server-public-ip-no-domain)'s frontend steps, but the Nginx config stays **plain HTTP on port 80 only** — the ALB handles HTTPS, so no certbot is installed here:
 ```bash
 BACKEND_HOST="<backend-private-ip>"
 
@@ -265,9 +265,9 @@ Verify: open `http://<frontend-public-ip>/` in a browser.
 
 ### Case 3 — Multi-server, public IP + domain
 
-Same as **Case 2**, but a domain's DNS A record must already point at the frontend instance's public IP, and the frontend SG must also allow 443.
+Same as **[Case 2](#case-2--multi-server-public-ip-no-domain)**, but a domain's DNS A record must already point at the frontend instance's public IP, and the frontend SG must also allow 443.
 
-Run the **DB instance** and **Backend instance** steps exactly as in Case 2. For the **Frontend instance**, use this variant:
+Run the **DB instance** and **Backend instance** steps exactly as in [Case 2](#case-2--multi-server-public-ip-no-domain). For the **Frontend instance**, use this variant:
 
 ```bash
 BACKEND_HOST="<backend-private-ip>"
@@ -486,9 +486,9 @@ Verify: open `http://<instance-public-ip>/` in a browser.
 
 ### Case 6 — Single-server, public IP + domain
 
-Identical to **Case 5**, but a domain's DNS A record must already point at this instance's public IP before the last step.
+Identical to **[Case 5](#case-5--single-server-public-ip-no-domain)**, but a domain's DNS A record must already point at this instance's public IP before the last step.
 
-Run **Step 1 — Database** and **Step 2 — Backend** exactly as in Case 5. For **Step 3 — Frontend**, use this Nginx config instead (plain HTTP first, so certbot's ACME challenge can complete), then request the certificate:
+Run **Step 1 — Database** and **Step 2 — Backend** exactly as in [Case 5](#case-5--single-server-public-ip-no-domain). For **Step 3 — Frontend**, use this Nginx config instead (plain HTTP first, so certbot's ACME challenge can complete), then request the certificate:
 
 ```bash
 sudo apt-get install -y nginx certbot python3-certbot-nginx
