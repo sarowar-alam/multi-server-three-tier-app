@@ -55,7 +55,7 @@ fi
 
 DATABASE_URL="postgresql://bmi_user:${DB_PASSWORD}@${DB_HOST}:5432/bmi_health"
 APP_DIR="/opt/bmi-app"
-REPO_URL="https://github.com/sarowar-alam/multi-server-three-tier-app.git"
+REPO_URL="https://github.com/sarowar-alam/three-tier-aws-deployment.git"
 # User data runs as root — pin PM2_HOME to root's home so startup
 # service and process list always use the same location.
 export PM2_HOME=/root/.pm2

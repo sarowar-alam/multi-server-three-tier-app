@@ -14,7 +14,7 @@
 DB_PASSWORD="0stad2025"
 # ─────────────────────────────────────────────────────────────────────────────
 
-curl -fsSL https://raw.githubusercontent.com/sarowar-alam/multi-server-three-tier-app/main/userdata-setup-scripts/tier3-database.sh -o /tmp/setup-db.sh
+curl -fsSL https://raw.githubusercontent.com/sarowar-alam/three-tier-aws-deployment/main/userdata-setup-scripts/tier3-database.sh -o /tmp/setup-db.sh
 bash /tmp/setup-db.sh -Password="${DB_PASSWORD}"
 
 # =============================================================================

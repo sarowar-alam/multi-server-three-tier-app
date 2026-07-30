@@ -52,7 +52,7 @@ DB_PASSWORD="0stad2025"               # empty    = multi-server (frontend EC2 on
                              #            Only used when BACKEND_HOST=localhost.
 # ============================================================
 
-SCRIPT_URL="https://raw.githubusercontent.com/sarowar-alam/multi-server-three-tier-app/main/userdata-setup-scripts/tier1-frontend.sh"
+SCRIPT_URL="https://raw.githubusercontent.com/sarowar-alam/three-tier-aws-deployment/main/userdata-setup-scripts/tier1-frontend.sh"
 
 # Build argument list
 ARGS="-Mode=${MODE} -BackendHost=${BACKEND_HOST}"

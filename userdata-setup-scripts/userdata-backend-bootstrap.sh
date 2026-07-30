@@ -17,7 +17,7 @@ DB_HOST="10.0.149.61"        # Private IP of the DB server (Tier 3)
 FRONTEND_URL="*"             # Or set to http://WEB_SERVER_IP when known
 # ─────────────────────────────────────────────────────────────────────────────
 
-curl -fsSL https://raw.githubusercontent.com/sarowar-alam/multi-server-three-tier-app/main/userdata-setup-scripts/tier2-backend.sh -o /tmp/setup-backend.sh
+curl -fsSL https://raw.githubusercontent.com/sarowar-alam/three-tier-aws-deployment/main/userdata-setup-scripts/tier2-backend.sh -o /tmp/setup-backend.sh
 bash /tmp/setup-backend.sh \
   -DbPassword="${DB_PASSWORD}" \
   -DbHost="${DB_HOST}" \

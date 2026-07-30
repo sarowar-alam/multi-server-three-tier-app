@@ -44,7 +44,7 @@ PRIVATE_SUBNETS = [
 # ── GitHub raw URL base ───────────────────────────────────────────────────────
 GITHUB_RAW_BASE = (
     "https://raw.githubusercontent.com/sarowar-alam/"
-    "multi-server-three-tier-app/main/userdata-setup-scripts"
+    "three-tier-aws-deployment/main/userdata-setup-scripts"
 )
 
 # ── Tagging ───────────────────────────────────────────────────────────────────

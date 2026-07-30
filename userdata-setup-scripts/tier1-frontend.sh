@@ -75,7 +75,7 @@ fi
 
 APP_DIR="/opt/bmi-app"
 DIST_DIR="/var/www/bmi-app/dist"
-REPO_URL="https://github.com/sarowar-alam/multi-server-three-tier-app.git"
+REPO_URL="https://github.com/sarowar-alam/three-tier-aws-deployment.git"
 NGINX_CONF="/etc/nginx/sites-available/bmi-app"
 
 echo "  Mode         : ${MODE}"
@@ -119,7 +119,7 @@ if [ "${BACKEND_HOST}" = "localhost" ] && [ -n "${DB_PASSWORD}" ]; then
   fi
   echo "  CORS Frontend URL : ${FRONTEND_URL_BE}"
 
-  RAW_BASE="https://raw.githubusercontent.com/sarowar-alam/multi-server-three-tier-app/main/userdata-setup-scripts"
+  RAW_BASE="https://raw.githubusercontent.com/sarowar-alam/three-tier-aws-deployment/main/userdata-setup-scripts"
 
   echo "[S1/3] Downloading and running tier3-database.sh..."
   curl -fsSL "${RAW_BASE}/tier3-database.sh" -o /tmp/tier3-database.sh
