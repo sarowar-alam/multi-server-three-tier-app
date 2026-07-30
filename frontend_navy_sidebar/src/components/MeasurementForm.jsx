@@ -30,7 +30,7 @@ export default function MeasurementForm({ onSaved }) {
       {error && <div className="alert alert-error" role="alert" aria-live="assertive">{error}</div>}
       {success && <div className="alert alert-success" role="alert" aria-live="polite">Measurement saved successfully!</div>}
 
-      <div className="form-group-label">Measurement Date</div>
+      <div className="form-section-label">Measurement Date</div>
       <div className="form-row">
         <div className="form-group">
           <label htmlFor="measurementDate">Date</label>
@@ -45,7 +45,7 @@ export default function MeasurementForm({ onSaved }) {
         </div>
       </div>
 
-      <div className="form-group-label">Body Measurements</div>
+      <div className="form-section-label">Body Measurements</div>
       <div className="form-row">
         <div className="form-group">
           <label htmlFor="weight">Weight (kg)</label>
@@ -92,7 +92,7 @@ export default function MeasurementForm({ onSaved }) {
         </div>
       </div>
 
-      <div className="form-group-label">Profile</div>
+      <div className="form-section-label">Profile</div>
       <div className="form-row">
         <div className="form-group">
           <label htmlFor="sex">Biological Sex</label>

@@ -32,15 +32,15 @@ export default function TrendChart() {
           datasets: [{
             label: 'Average BMI',
             data: rows.map(r => parseFloat(r.avg_bmi)),
-            borderColor: '#1f5c4a',
-            backgroundColor: 'transparent',
-            pointBackgroundColor: '#1f5c4a',
+            borderColor: '#4f46e5',
+            backgroundColor: 'rgba(79, 70, 229, 0.08)',
+            pointBackgroundColor: '#4f46e5',
             pointBorderColor: '#ffffff',
             pointBorderWidth: 2,
-            pointRadius: 4,
-            pointHoverRadius: 6,
-            tension: 0.25,
-            fill: false,
+            pointRadius: 5,
+            pointHoverRadius: 7,
+            tension: 0.4,
+            fill: true,
           }],
         });
       })

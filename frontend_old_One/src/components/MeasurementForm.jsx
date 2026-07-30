@@ -7,7 +7,7 @@ export default function MeasurementForm({ onSaved }) {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
-
+  
   const sub = async e => {
     e.preventDefault();
     setError(null);
@@ -24,35 +24,33 @@ export default function MeasurementForm({ onSaved }) {
       setLoading(false);
     }
   };
-
+  
   return (
     <form onSubmit={sub}>
       {error && <div className="alert alert-error" role="alert" aria-live="assertive">{error}</div>}
       {success && <div className="alert alert-success" role="alert" aria-live="polite">Measurement saved successfully!</div>}
-
-      <div className="form-group-label">Measurement Date</div>
+      
       <div className="form-row">
         <div className="form-group">
-          <label htmlFor="measurementDate">Date</label>
-          <input
+          <label htmlFor="measurementDate">Measurement Date</label>
+          <input 
             id="measurementDate"
             type="date"
-            value={f.measurementDate}
+            value={f.measurementDate} 
             onChange={e => sf({ ...f, measurementDate: e.target.value })}
             required
             max={new Date().toISOString().split('T')[0]}
           />
         </div>
       </div>
-
-      <div className="form-group-label">Body Measurements</div>
+      
       <div className="form-row">
         <div className="form-group">
           <label htmlFor="weight">Weight (kg)</label>
-          <input
+          <input 
             id="weight"
-            type="number"
-            value={f.weightKg}
+            type="number" 
+            value={f.weightKg} 
             onChange={e => sf({ ...f, weightKg: +e.target.value })}
             required
             min="1"
@@ -61,13 +59,13 @@ export default function MeasurementForm({ onSaved }) {
             placeholder="70"
           />
         </div>
-
+        
         <div className="form-group">
           <label htmlFor="height">Height (cm)</label>
-          <input
+          <input 
             id="height"
             type="number"
-            value={f.heightCm}
+            value={f.heightCm} 
             onChange={e => sf({ ...f, heightCm: +e.target.value })}
             required
             min="1"
@@ -76,13 +74,13 @@ export default function MeasurementForm({ onSaved }) {
             placeholder="175"
           />
         </div>
-
+        
         <div className="form-group">
           <label htmlFor="age">Age (years)</label>
-          <input
+          <input 
             id="age"
             type="number"
-            value={f.age}
+            value={f.age} 
             onChange={e => sf({ ...f, age: +e.target.value })}
             required
             min="1"
@@ -91,14 +89,13 @@ export default function MeasurementForm({ onSaved }) {
           />
         </div>
       </div>
-
-      <div className="form-group-label">Profile</div>
+      
       <div className="form-row">
         <div className="form-group">
           <label htmlFor="sex">Biological Sex</label>
-          <select
+          <select 
             id="sex"
-            value={f.sex}
+            value={f.sex} 
             onChange={e => sf({ ...f, sex: e.target.value })}
             required
           >
@@ -106,12 +103,12 @@ export default function MeasurementForm({ onSaved }) {
             <option value="female">Female</option>
           </select>
         </div>
-
+        
         <div className="form-group">
           <label htmlFor="activity">Activity Level</label>
-          <select
+          <select 
             id="activity"
-            value={f.activity}
+            value={f.activity} 
             onChange={e => sf({ ...f, activity: e.target.value })}
             required
           >
@@ -123,7 +120,7 @@ export default function MeasurementForm({ onSaved }) {
           </select>
         </div>
       </div>
-
+      
       <button type="submit" disabled={loading}>
         {loading ? 'Saving...' : 'Save Measurement'}
       </button>
