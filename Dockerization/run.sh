@@ -79,7 +79,8 @@ done
 # --- Backend (rebuild + recreate each run to pick up code changes) ---
 docker_cmd build -f "$SCRIPT_DIR/backend/Dockerfile" -t bmi-backend "$ROOT_DIR"
 docker_cmd rm -f backend >/dev/null 2>&1 || true
-docker_cmd run -d --name backend --network "$NETWORK" --env-file "$ENV_FILE" bmi-backend
+# -e overrides DATABASE_URL from --env-file with the bash-expanded value (docker's own env-file parsing doesn't interpolate)
+docker_cmd run -d --name backend --network "$NETWORK" --env-file "$ENV_FILE" -e "DATABASE_URL=$DATABASE_URL" bmi-backend
 
 # --- Frontend (rebuild + recreate each run; only container publishing a host port) ---
 docker_cmd build -f "$SCRIPT_DIR/frontend/Dockerfile" -t bmi-frontend "$ROOT_DIR"
