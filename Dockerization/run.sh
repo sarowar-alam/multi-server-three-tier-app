@@ -60,7 +60,7 @@ docker_cmd network inspect "$NETWORK" >/dev/null 2>&1 || docker_cmd network crea
 
 # --- Database (preserve existing container/data across reruns) ---
 if ! docker_cmd ps -aq -f "name=^db$" | grep -q .; then
-  docker_cmd run -d --name db --network "$NETWORK" \
+  docker_cmd run -d --name db --network "$NETWORK" --restart unless-stopped \
     --env-file "$ENV_FILE" \
     -v bmi-db-data:/var/lib/postgresql/data \
     -v "$ROOT_DIR/database/migrations":/docker-entrypoint-initdb.d:ro \
@@ -80,11 +80,11 @@ done
 docker_cmd build -f "$SCRIPT_DIR/backend/Dockerfile" -t bmi-backend "$ROOT_DIR"
 docker_cmd rm -f backend >/dev/null 2>&1 || true
 # -e overrides DATABASE_URL from --env-file with the bash-expanded value (docker's own env-file parsing doesn't interpolate)
-docker_cmd run -d --name backend --network "$NETWORK" --env-file "$ENV_FILE" -e "DATABASE_URL=$DATABASE_URL" bmi-backend
+docker_cmd run -d --name backend --network "$NETWORK" --restart unless-stopped --env-file "$ENV_FILE" -e "DATABASE_URL=$DATABASE_URL" bmi-backend
 
 # --- Frontend (rebuild + recreate each run; only container publishing a host port) ---
 docker_cmd build -f "$SCRIPT_DIR/frontend/Dockerfile" -t bmi-frontend "$ROOT_DIR"
 docker_cmd rm -f frontend >/dev/null 2>&1 || true
-docker_cmd run -d --name frontend --network "$NETWORK" -p 80:80 bmi-frontend
+docker_cmd run -d --name frontend --network "$NETWORK" --restart unless-stopped -p 80:80 bmi-frontend
 
 echo "Done. App available at http://<this-server-ip>/"
