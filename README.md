@@ -24,21 +24,19 @@ flowchart LR
 The tiers **never change**. What changes between scenarios is only:
 1. **Topology** — do the 3 tiers live on 1 EC2 instance, or 3 separate EC2 instances?
 2. **Access mode** — public IP direct, public IP + Let's Encrypt domain, or behind an ALB with ACM/HTTPS?
-3. **Automation method** — plain shell scripts, a Python/boto3 CLI, or Terraform.
+3. **Automation method** — manual raw commands, a Python/boto3 CLI, or Terraform.
 
 ---
 
 ## 2. Deployment Methods (pick one)
 
-All three methods run the **exact same underlying shell logic** ([userdata-setup-scripts/](userdata-setup-scripts/)) — they just differ in *how that shell logic gets onto the EC2 instance* and *how the surrounding AWS infrastructure (VPC, ALB, IAM, Route53) gets created*.
+| Method | Directory | Best for |
+|---|---|---|
+| **A. Manual (raw commands)** | [backend/](backend/), [database/](database/), [frontend/](frontend/) | Learning exactly what each tier needs, full hands-on control |
+| **B. Python (boto3) CLI** | [infrastructure-shell-scripts/](infrastructure-shell-scripts/) | Repeatable one-command deploy/teardown from your laptop |
+| **C. Terraform** | [terraform/](terraform/) | Infrastructure-as-code, state tracking, team workflows |
 
-| Method | Directory | Best for | Infra creation | Server bootstrap |
-|---|---|---|---|---|
-| **A. Manual Shell** | [userdata-setup-scripts/](userdata-setup-scripts/) | Learning, quick single-instance tests, pasting into EC2 "User data" by hand | You create the EC2/VPC/SG manually in the console | `userdata-*-bootstrap.sh` → downloads and runs `tier1/2/3-*.sh` |
-| **B. Python (boto3) CLI** | [infrastructure-shell-scripts/](infrastructure-shell-scripts/) | Repeatable one-command deploy/teardown from your laptop | `deploy.py` creates VPC, subnets, SGs, EC2, ALB, Route53 via boto3 | Same `tier1/2/3-*.sh` scripts, passed as EC2 user-data |
-| **C. Terraform** | [terraform/](terraform/) | Infrastructure-as-code, state tracking, team workflows | `terraform apply` creates the same AWS resources declaratively | Same `tier1/2/3-*.sh` logic, templated into `.tftpl` user-data files |
-
-> Because all three methods call the **same** `tier1-frontend.sh`, `tier2-backend.sh`, and `tier3-database.sh` scripts (from GitHub raw, at instance boot), the actual software installed on each server is identical no matter which method you used to provision it.
+> Methods B and C automate the *same* install steps shown manually in Section 5 below — VPC/EC2/ALB/Route53 provisioning plus the identical PostgreSQL, Node.js/PM2, and Nginx setup on each tier.
 
 ---
 
@@ -53,57 +51,212 @@ Independent of the method above, choose how many EC2 instances host the 3 tiers:
 ### Multi-server (1 EC2 instance per tier)
 - Tier 3 (DB) and Tier 2 (Backend) typically sit in **private subnets**.
 - Tier 1 (Frontend) is the only tier reachable from the internet (directly, or behind an ALB).
-- Backend is configured with `-DbHost=<db-private-ip>`; Frontend is configured with `-BackendHost=<backend-private-ip>`.
+- Backend is configured to reach the DB's private IP; Frontend is configured to reach the Backend's private IP.
 
 ### Access mode (combine with either topology)
 | Mode | How traffic reaches Tier 1 | TLS |
 |---|---|---|
-| `public` (no domain) | Direct to EC2 public IP | None (plain HTTP) |
-| `public` + domain | Direct to EC2 public IP, Route53 A record → domain | Let's Encrypt (certbot), auto-issued by `tier1-frontend.sh` |
-| `alb` | Application Load Balancer in front of Tier 1 | ACM certificate on the ALB (created outside these scripts) |
+| Public IP (no domain) | Direct to EC2 public IP | None (plain HTTP) |
+| Public IP + domain | Direct to EC2 public IP, Route53 A record → domain | Let's Encrypt (certbot) |
+| ALB | Application Load Balancer in front of Tier 1 | ACM certificate on the ALB |
 
 ---
 
 ## 4. The Generalized Install Order (applies to every method/topology)
 
-Regardless of shell / Python / Terraform, and regardless of 1 server or 3 servers, every deployment follows this same sequence at boot (via EC2 user-data):
+Regardless of manual / Python / Terraform, and regardless of 1 server or 3 servers, every deployment follows this same sequence:
 
-1. **Tier 3 — Database** ([tier3-database.sh](userdata-setup-scripts/tier3-database.sh))
-   Installs PostgreSQL 15, creates the `bmi_user` role + `bmi_health` database, and applies the schema migration ([database/migrations/001_create_measurements.sql](database/migrations/001_create_measurements.sql)).
-2. **Tier 2 — Backend** ([tier2-backend.sh](userdata-setup-scripts/tier2-backend.sh))
-   Installs Node.js 22 + PM2, clones the repo, `npm ci --omit=dev` on [backend/](backend/), writes `.env` with `DATABASE_URL` pointing at Tier 3, verifies the DB connection, then starts the API under PM2.
-3. **Tier 1 — Frontend** ([tier1-frontend.sh](userdata-setup-scripts/tier1-frontend.sh))
-   Installs Node.js + Nginx (+ certbot if a domain is set), clones the repo, `npm ci && npm run build` on [frontend/](frontend/), deploys the static build to Nginx's web root, and writes an Nginx config that reverse-proxies `/api/` to Tier 2.
+1. **Tier 3 — Database**: Install PostgreSQL 15, create the `bmi_user` role + `bmi_health` database, apply the schema migration ([database/migrations/001_create_measurements.sql](database/migrations/001_create_measurements.sql)).
+2. **Tier 2 — Backend**: Install Node.js 22 + PM2, install [backend/](backend/) dependencies, configure `DATABASE_URL` pointing at Tier 3, start the API under PM2.
+3. **Tier 1 — Frontend**: Install Nginx (+certbot if using a domain), build [frontend/](frontend/) with Vite, deploy the static build, configure Nginx to reverse-proxy `/api/` to Tier 2.
 
-In **single-server** mode, `tier1-frontend.sh` automatically chains steps 1 and 2 first (when `-BackendHost=localhost` and `-DbPassword` is set) before doing its own frontend setup — so a single user-data script does the whole stack.
-
-In **multi-server** mode, each script runs independently on its own instance, connected via private IPs you pass as parameters.
+In **single-server** mode all three run on one box against `localhost`. In **multi-server** mode each runs on its own instance, wired together via private IPs.
 
 ---
 
-## 5. Method A — Manual Shell (fastest way to try it)
+## 5. Method A — Manual Installation (Raw Commands, No Scripts)
 
-Use the files in [userdata-setup-scripts/](userdata-setup-scripts/) directly. Launch a plain Ubuntu 22.04/24.04 EC2 instance, paste the relevant bootstrap script into **User data**, edit the few variables at the top, and launch.
+This section assumes you only have the application source — [backend/](backend/), [database/](database/), [frontend/](frontend/) — and walks through installing all three tiers **by hand**, with no helper scripts.
 
-| Scenario | Paste this as EC2 User Data |
-|---|---|
-| Single-server (all-in-one) | [userdata-frontend-bootstrap.sh](userdata-setup-scripts/userdata-frontend-bootstrap.sh) with `BACKEND_HOST="localhost"` and `DB_PASSWORD="yourpass"` set |
-| Multi-server: DB instance | [userdata-database-bootstrap.sh](userdata-setup-scripts/userdata-database-bootstrap.sh) |
-| Multi-server: Backend instance | [userdata-backend-bootstrap.sh](userdata-setup-scripts/userdata-backend-bootstrap.sh) (set `DB_HOST` to the DB instance's private IP) |
-| Multi-server: Frontend instance | [userdata-frontend-bootstrap.sh](userdata-setup-scripts/userdata-frontend-bootstrap.sh) (set `BACKEND_HOST` to the backend instance's private IP) |
+### 5.0 Shared prerequisite: connect and get the code
 
-Each bootstrap script simply does:
-```bash
-curl -fsSL <raw-github-url-of-tierN-script> -o /tmp/setup.sh
-bash /tmp/setup.sh -Param=value ...
-```
-so you can also run the underlying `tier1/2/3-*.sh` scripts directly over SSM/SSH if you prefer full manual control.
+Launch an Ubuntu 22.04/24.04 EC2 instance (one for single-server, three for multi-server) with an IAM instance profile that grants SSM access (`AmazonSSMManagedInstanceCore`), then connect without SSH keys:
 
-**Verify:**
 ```bash
 aws ssm start-session --target <instance-id>
-sudo tail -f /var/log/bmi-frontend-setup.log   # or bmi-backend-setup.log / bmi-db-setup.log
 ```
+
+On each instance, pull the app source:
+
+```bash
+sudo apt-get update -y
+sudo apt-get install -y git
+sudo git clone https://github.com/sarowar-alam/three-tier-aws-deployment.git /opt/bmi-app
+cd /opt/bmi-app
+```
+
+Only `backend/`, `database/`, `frontend/` are used below.
+
+---
+
+### 5.A Single-server walkthrough (all 3 tiers on 1 instance)
+
+#### Step 1 — Database tier
+
+```bash
+DB_PASS="ChangeMe123!"
+
+# Install PostgreSQL 15 from the official PGDG apt repo
+sudo apt-get install -y gnupg curl lsb-release
+curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /usr/share/keyrings/postgresql.gpg
+echo "deb [signed-by=/usr/share/keyrings/postgresql.gpg] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+sudo apt-get update -y
+sudo apt-get install -y postgresql-15 postgresql-contrib-15
+sudo systemctl enable --now postgresql
+
+# Create role + database
+sudo -u postgres psql -c "CREATE ROLE bmi_user WITH LOGIN PASSWORD '${DB_PASS}';"
+sudo -u postgres psql -c "CREATE DATABASE bmi_health OWNER bmi_user;"
+
+# Apply schema migration directly from the repo
+sudo -u postgres psql -d bmi_health -f /opt/bmi-app/database/migrations/001_create_measurements.sql
+sudo -u postgres psql -d bmi_health -c "GRANT SELECT, INSERT, UPDATE, DELETE ON measurements TO bmi_user;"
+sudo -u postgres psql -d bmi_health -c "GRANT USAGE, SELECT ON SEQUENCE measurements_id_seq TO bmi_user;"
+
+# Allow local TCP connections (Node.js on the same box)
+echo "host    bmi_health  bmi_user  127.0.0.1/32    scram-sha-256" | sudo tee -a /etc/postgresql/15/main/pg_hba.conf
+sudo systemctl restart postgresql
+```
+
+Verify: `sudo -u postgres psql -d bmi_health -c "\dt"` should list the `measurements` table.
+
+#### Step 2 — Backend tier
+
+```bash
+# Node.js 22 LTS + PM2
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo bash -
+sudo apt-get install -y nodejs
+sudo npm install -g pm2
+
+cd /opt/bmi-app/backend
+npm ci --omit=dev
+
+cat <<EOF | sudo tee .env
+PORT=3000
+NODE_ENV=production
+DATABASE_URL=postgresql://bmi_user:${DB_PASS}@localhost:5432/bmi_health
+FRONTEND_URL=http://localhost
+DB_POOL_SIZE=20
+EOF
+
+pm2 start src/server.js --name bmi-backend --env production
+pm2 save
+sudo env PATH="$PATH:/usr/bin" pm2 startup systemd -u root --hp /root
+```
+
+Verify: `curl http://localhost:3000/health` → `{"status":"ok"}`.
+
+#### Step 3 — Frontend tier
+
+```bash
+sudo apt-get install -y nginx
+
+cd /opt/bmi-app/frontend
+npm ci
+npm run build
+
+sudo mkdir -p /var/www/bmi-app/dist
+sudo cp -r dist/. /var/www/bmi-app/dist/
+
+sudo rm -f /etc/nginx/sites-enabled/default
+cat <<'NGINXEOF' | sudo tee /etc/nginx/sites-available/bmi-app
+server {
+    listen 80 default_server;
+    server_name _;
+    root  /var/www/bmi-app/dist;
+    index index.html;
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+    location /api/ {
+        proxy_pass         http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+    }
+    location /health {
+        proxy_pass http://localhost:3000/health;
+    }
+}
+NGINXEOF
+
+sudo ln -sf /etc/nginx/sites-available/bmi-app /etc/nginx/sites-enabled/bmi-app
+sudo nginx -t
+sudo systemctl restart nginx
+```
+
+Verify: open `http://<instance-public-ip>/` in a browser, and `curl http://localhost/api/measurements`.
+
+---
+
+### 5.B Multi-server walkthrough (1 tier per instance)
+
+Same commands as above, split across 3 instances, with these differences. Security groups must allow: DB SG accepts 5432 from Backend SG only; Backend SG accepts 3000 from Frontend SG only; Frontend SG accepts 80/443 from the internet (or from the ALB SG only).
+
+#### DB instance
+Run Step 1 exactly as above, but bind `pg_hba.conf` to the backend's private IP (or the VPC CIDR) instead of `127.0.0.1`, and allow Postgres to listen on all interfaces:
+
+```bash
+echo "host    bmi_health  bmi_user  <backend-private-ip>/32    scram-sha-256" | sudo tee -a /etc/postgresql/15/main/pg_hba.conf
+sudo sed -i "s/^#*listen_addresses\s*=.*/listen_addresses = '*'/" /etc/postgresql/15/main/postgresql.conf
+sudo systemctl restart postgresql
+```
+
+Note this instance's private IP — it's needed by the backend instance.
+
+#### Backend instance
+Run Step 2 exactly as above, but point `DATABASE_URL` at the DB instance's private IP instead of `localhost`:
+
+```bash
+DATABASE_URL=postgresql://bmi_user:${DB_PASS}@<db-private-ip>:5432/bmi_health
+```
+
+Note this instance's private IP — it's needed by the frontend instance.
+
+Verify: `curl http://localhost:3000/health` on this instance.
+
+#### Frontend instance
+Run Step 3 exactly as above, but point the Nginx `proxy_pass` targets at the backend instance's private IP instead of `localhost`:
+
+```nginx
+location /api/ {
+    proxy_pass http://<backend-private-ip>:3000;
+    ...
+}
+location /health {
+    proxy_pass http://<backend-private-ip>:3000/health;
+}
+```
+
+Verify: open `http://<frontend-public-ip>/` in a browser.
+
+---
+
+### 5.C Optional: HTTPS via Let's Encrypt (either topology)
+
+Only needed on the frontend instance, once the base HTTP setup above is working and a domain's DNS A record already points at it:
+
+```bash
+sudo apt-get install -y certbot python3-certbot-nginx
+sudo certbot --nginx -d yourdomain.com --agree-tos -m you@example.com --redirect --non-interactive
+```
+
+### 5.D Prefer automation?
+
+The exact steps above are also available as ready-to-run scripts in [userdata-setup-scripts/](userdata-setup-scripts/) (`tier1-frontend.sh`, `tier2-backend.sh`, `tier3-database.sh`) if you'd rather not type them by hand.
 
 ---
 
@@ -175,7 +328,7 @@ terraform destroy   # tear down this scenario's resources
 
 ```mermaid
 flowchart TD
-    A["Want to try it fast, no AWS automation?"] -->|Yes| B["Method A: Manual Shell"]
+    A["Want to learn every install step, by hand?"] -->|Yes| B["Method A: Manual raw commands"]
     A -->|No| C["Want a scriptable CLI you can re-run?"]
     C -->|Yes| D["Method B: Python/boto3"]
     C -->|No| E["Want IaC with state + team workflows?"]
@@ -198,8 +351,8 @@ backend/                     Node.js/Express API source
 frontend/                     React frontend source (deployed/live theme)
 frontend_navy_sidebar/        Alternate UI theme (reference copy, not deployed)
 frontend_clinical_minimal/    Alternate UI theme (reference copy, not deployed)
-database/migrations/          SQL schema migrations, applied by tier3-database.sh
-userdata-setup-scripts/        Method A: shell scripts run as EC2 user-data (source of truth for install logic)
+database/migrations/          SQL schema migrations, applied to Tier 3
+userdata-setup-scripts/        Automated equivalent of Section 5's manual steps, run as EC2 user-data
 infrastructure-shell-scripts/  Method B: Python/boto3 deploy + teardown CLI
 terraform/                     Method C: Terraform modules for all 6 scenarios
 ```
@@ -210,7 +363,7 @@ terraform/                     Method C: Terraform modules for all 6 scenarios
 
 - Ubuntu 22.04 or 24.04 LTS EC2 instances
 - Outbound internet access (to clone GitHub, install packages, reach Let's Encrypt if used)
-- An AWS account with permissions for EC2 / VPC / IAM (Methods B & C) or console access (Method A)
+- An AWS account with permissions for EC2 / VPC / IAM (Methods B & C) or console/SSM access (Method A)
 - A PostgreSQL password of your choosing, supplied consistently to Tier 2 and Tier 3
 
 Whichever method or topology you pick, the app tiers, ports, install order, and verification steps are identical — only the provisioning mechanics differ.
