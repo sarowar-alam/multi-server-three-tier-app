@@ -39,10 +39,19 @@ else
   echo "Docker already installed: $(docker --version)"
 fi
 
-if ! groups "$USER" | grep -q '\bdocker\b'; then
-  sudo usermod -aG docker "$USER" || true
-  echo "Added $USER to the docker group — log out/in for passwordless docker access (using sudo for this run)."
+# Resolve the real invoking user/home even when run as `sudo bash run.sh` ($USER/$HOME would be root's otherwise)
+REAL_USER="${SUDO_USER:-$USER}"
+REAL_HOME="$(getent passwd "$REAL_USER" | cut -d: -f6)"
+
+if ! groups "$REAL_USER" | grep -q '\bdocker\b'; then
+  sudo usermod -aG docker "$REAL_USER" || true
+  echo "Added $REAL_USER to the docker group — log out/in for passwordless docker access (using sudo for this run)."
   USE_SUDO=1
+  # Group membership needs a new login session to take effect; alias docker to sudo docker in the meantime
+  if [ -n "$REAL_HOME" ] && ! grep -q "^alias docker=" "$REAL_HOME/.bashrc" 2>/dev/null; then
+    echo "alias docker='sudo docker'" >> "$REAL_HOME/.bashrc"
+    echo "Added 'alias docker=sudo docker' to $REAL_HOME/.bashrc — run 'source ~/.bashrc' (or open a new shell) to use plain docker commands now."
+  fi
 fi
 docker info >/dev/null 2>&1 || USE_SUDO=1
 
