@@ -1,0 +1,21 @@
+**/node_modules
+**/dist
+**/build
+**/.env
+**/.env.*
+!**/.env.example
+
+.git
+.gitignore
+*.md
+
+# Unrelated app variants / infra — not part of this dockerization
+frontend_clinical_minimal
+frontend_navy_sidebar
+frontend_old_One
+terraform
+infrastructure-shell-scripts
+userdata-setup-scripts
+
+**/*.log
+.vscode
