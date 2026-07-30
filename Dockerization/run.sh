@@ -90,7 +90,12 @@ docker_cmd build -f "$SCRIPT_DIR/frontend/Dockerfile" -t bmi-frontend "$ROOT_DIR
 docker_cmd rm -f frontend >/dev/null 2>&1 || true
 docker_cmd run -d --name frontend --network "$NETWORK" --restart unless-stopped -p 80:80 bmi-frontend
 
-# Prefer the cloud public IP (AWS IMDSv2) if reachable, else fall back to the primary local IP
-SERVER_IP="$(curl -s --max-time 2 -H "X-aws-ec2-metadata-token: $(curl -s --max-time 1 -X PUT http://169.254.169.254/latest/api/token -H 'X-aws-ec2-metadata-token-ttl-seconds: 60' 2>/dev/null)" http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null || true)"
+# Fetch one IMDSv2 token, reuse it for both public and private IP lookups (AWS EC2 only)
+IMDS_TOKEN="$(curl -s --max-time 1 -X PUT http://169.254.169.254/latest/api/token -H 'X-aws-ec2-metadata-token-ttl-seconds: 60' 2>/dev/null || true)"
+SERVER_IP=""
+if [ -n "$IMDS_TOKEN" ]; then
+  SERVER_IP="$(curl -s --max-time 2 -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null || true)"
+  [ -n "$SERVER_IP" ] || SERVER_IP="$(curl -s --max-time 2 -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" http://169.254.169.254/latest/meta-data/local-ipv4 2>/dev/null || true)"
+fi
 [ -n "$SERVER_IP" ] || SERVER_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
 echo "Done. App available at http://${SERVER_IP:-<this-server-ip>}/"
