@@ -4,6 +4,9 @@ set -euo pipefail
 
 # Skip BuildKit's git-based provenance attestation (avoids a benign "git rev-parse" warning)
 export BUILDX_NO_DEFAULT_ATTESTATIONS=1
+# Avoid garbled spinner/checkmark output when the terminal locale isn't UTF-8
+export LANG="${LANG:-C.UTF-8}"
+export LC_ALL="${LC_ALL:-C.UTF-8}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="$SCRIPT_DIR/.env"
@@ -68,7 +71,7 @@ if [ ! -f "$ENV_FILE" ]; then
 fi
 
 cd "$SCRIPT_DIR"
-compose_cmd up -d --build
+compose_cmd --progress plain up -d --build
 compose_cmd ps
 
 # Fetch one IMDSv2 token, reuse it for both public and private IP lookups (AWS EC2 only)

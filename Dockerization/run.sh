@@ -4,6 +4,9 @@ set -euo pipefail
 
 # Skip BuildKit's git-based provenance attestation (avoids a benign "git rev-parse" warning)
 export BUILDX_NO_DEFAULT_ATTESTATIONS=1
+# Avoid garbled spinner/checkmark output when the terminal locale isn't UTF-8
+export LANG="${LANG:-C.UTF-8}"
+export LC_ALL="${LC_ALL:-C.UTF-8}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -89,13 +92,13 @@ until [ "$(docker_cmd inspect -f '{{.State.Health.Status}}' db)" = "healthy" ]; 
 done
 
 # --- Backend (rebuild + recreate each run to pick up code changes) ---
-docker_cmd build -f "$SCRIPT_DIR/backend/Dockerfile" -t bmi-backend "$ROOT_DIR"
+docker_cmd build --progress=plain -f "$SCRIPT_DIR/backend/Dockerfile" -t bmi-backend "$ROOT_DIR"
 docker_cmd rm -f backend >/dev/null 2>&1 || true
 # -e overrides DATABASE_URL from --env-file with the bash-expanded value (docker's own env-file parsing doesn't interpolate)
 docker_cmd run -d --name backend --network "$NETWORK" --restart unless-stopped --env-file "$ENV_FILE" -e "DATABASE_URL=$DATABASE_URL" bmi-backend
 
 # --- Frontend (rebuild + recreate each run; only container publishing a host port) ---
-docker_cmd build -f "$SCRIPT_DIR/frontend/Dockerfile" -t bmi-frontend "$ROOT_DIR"
+docker_cmd build --progress=plain -f "$SCRIPT_DIR/frontend/Dockerfile" -t bmi-frontend "$ROOT_DIR"
 docker_cmd rm -f frontend >/dev/null 2>&1 || true
 docker_cmd run -d --name frontend --network "$NETWORK" --restart unless-stopped -p 80:80 bmi-frontend
 
