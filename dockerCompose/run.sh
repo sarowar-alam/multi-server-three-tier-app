@@ -2,6 +2,9 @@
 # Builds and runs the backend, database and frontend via docker compose.
 set -euo pipefail
 
+# Skip BuildKit's git-based provenance attestation (avoids a benign "git rev-parse" warning)
+export BUILDX_NO_DEFAULT_ATTESTATIONS=1
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="$SCRIPT_DIR/.env"
 USE_SUDO=0
@@ -59,4 +62,7 @@ cd "$SCRIPT_DIR"
 compose_cmd up -d --build
 compose_cmd ps
 
-echo "Done. App available at http://<this-server-ip>/"
+# Prefer the cloud public IP (AWS IMDSv2) if reachable, else fall back to the primary local IP
+SERVER_IP="$(curl -s --max-time 2 -H "X-aws-ec2-metadata-token: $(curl -s --max-time 1 -X PUT http://169.254.169.254/latest/api/token -H 'X-aws-ec2-metadata-token-ttl-seconds: 60' 2>/dev/null)" http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null || true)"
+[ -n "$SERVER_IP" ] || SERVER_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
+echo "Done. App available at http://${SERVER_IP:-<this-server-ip>}/"
