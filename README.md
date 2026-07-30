@@ -1,5 +1,23 @@
 # Three-Tier AWS Deployment — BMI Health Tracker
 
+A fully manual, step-by-step guide for deploying a React + Node.js + PostgreSQL three-tier application on Ubuntu EC2 instances — one server or three, with or without a load balancer, with or without a custom domain. No scripts, no IaC — every command is run by hand so you understand exactly what each tier needs.
+
+## Table of Contents
+
+1. [What This App Is](#1-what-this-app-is)
+2. [Internal Architecture & Communication](#2-internal-architecture--communication)
+3. [Manual Implementation Guideline](#3-manual-implementation-guideline)
+   - [Case 1 — Multi-server, private subnet + ALB](#case-1--multi-server-private-subnet--alb)
+   - [Case 2 — Multi-server, public IP, no domain](#case-2--multi-server-public-ip-no-domain)
+   - [Case 3 — Multi-server, public IP + domain](#case-3--multi-server-public-ip--domain)
+   - [Case 4 — Single-server, private subnet + ALB](#case-4--single-server-private-subnet--alb)
+   - [Case 5 — Single-server, public IP, no domain](#case-5--single-server-public-ip-no-domain)
+   - [Case 6 — Single-server, public IP + domain](#case-6--single-server-public-ip--domain)
+4. [Repository Structure](#4-repository-structure)
+5. [Prerequisites](#5-prerequisites)
+
+---
+
 ## 1. What This App Is
 
 A BMI & health tracking app split into three independent tiers:
@@ -59,12 +77,12 @@ cd /opt/bmi-app
 
 | Case | Topology | Access | TLS |
 |---|---|---|---|
-| [1](#case-1--multi-server--private-subnet--alb) | Multi-server | Behind an ALB, instances in private subnets | ACM cert on the ALB |
-| [2](#case-2--multi-server--public-ip-no-domain) | Multi-server | Direct public IP | None (plain HTTP) |
-| [3](#case-3--multi-server--public-ip--domain) | Multi-server | Direct public IP + domain | Let's Encrypt (certbot) |
-| [4](#case-4--single-server--private-subnet--alb) | Single-server | Behind an ALB, instance in a private subnet | ACM cert on the ALB |
-| [5](#case-5--single-server--public-ip-no-domain) | Single-server | Direct public IP | None (plain HTTP) |
-| [6](#case-6--single-server--public-ip--domain) | Single-server | Direct public IP + domain | Let's Encrypt (certbot) |
+| [1](#case-1--multi-server-private-subnet--alb) | Multi-server | Behind an ALB, instances in private subnets | ACM cert on the ALB |
+| [2](#case-2--multi-server-public-ip-no-domain) | Multi-server | Direct public IP | None (plain HTTP) |
+| [3](#case-3--multi-server-public-ip--domain) | Multi-server | Direct public IP + domain | Let's Encrypt (certbot) |
+| [4](#case-4--single-server-private-subnet--alb) | Single-server | Behind an ALB, instance in a private subnet | ACM cert on the ALB |
+| [5](#case-5--single-server-public-ip-no-domain) | Single-server | Direct public IP | None (plain HTTP) |
+| [6](#case-6--single-server-public-ip--domain) | Single-server | Direct public IP + domain | Let's Encrypt (certbot) |
 
 ---
 
@@ -516,159 +534,6 @@ sudo systemctl restart nginx
 sudo certbot --nginx -d "${DOMAIN}" --agree-tos -m you@example.com --redirect --non-interactive
 ```
 Certbot rewrites the Nginx config to listen on 443 with the certificate and redirects HTTP → HTTPS, and sets up auto-renewal. Verify: open `https://yourdomain.com/` in a browser.
-
----
-
-### Case 2 — Multi-server, public IP, no domain
-
-Three instances (DB, Backend, Frontend), built **in that order**. Security groups: DB SG allows 5432 from Backend SG only; Backend SG allows 3000 from Frontend SG only; Frontend SG allows 80 from the internet.
-
-**On the DB instance:**
-```bash
-DB_PASS="ChangeMe123!"
-
-sudo apt-get install -y gnupg curl lsb-release
-curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /usr/share/keyrings/postgresql.gpg
-echo "deb [signed-by=/usr/share/keyrings/postgresql.gpg] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
-sudo apt-get update -y
-sudo apt-get install -y postgresql-15 postgresql-contrib-15
-sudo systemctl enable --now postgresql
-
-sudo -u postgres psql -c "CREATE ROLE bmi_user WITH LOGIN PASSWORD '${DB_PASS}';"
-sudo -u postgres psql -c "CREATE DATABASE bmi_health OWNER bmi_user;"
-sudo -u postgres psql -d bmi_health -f /opt/bmi-app/database/migrations/001_create_measurements.sql
-sudo -u postgres psql -d bmi_health -c "GRANT SELECT, INSERT, UPDATE, DELETE ON measurements TO bmi_user;"
-sudo -u postgres psql -d bmi_health -c "GRANT USAGE, SELECT ON SEQUENCE measurements_id_seq TO bmi_user;"
-
-echo "host    bmi_health  bmi_user  <backend-private-ip>/32    scram-sha-256" | sudo tee -a /etc/postgresql/15/main/pg_hba.conf
-sudo sed -i "s/^#*listen_addresses\s*=.*/listen_addresses = '*'/" /etc/postgresql/15/main/postgresql.conf
-sudo systemctl restart postgresql
-```
-Note this instance's **private IP** — needed on the backend instance below.
-
-**On the Backend instance:**
-```bash
-DB_PASS="ChangeMe123!"
-DB_HOST="<db-private-ip>"
-
-curl -fsSL https://deb.nodesource.com/setup_22.x | sudo bash -
-sudo apt-get install -y nodejs
-sudo npm install -g pm2
-
-cd /opt/bmi-app/backend
-npm ci --omit=dev
-
-cat <<EOF | sudo tee .env
-PORT=3000
-NODE_ENV=production
-DATABASE_URL=postgresql://bmi_user:${DB_PASS}@${DB_HOST}:5432/bmi_health
-FRONTEND_URL=http://<frontend-public-ip>
-DB_POOL_SIZE=20
-EOF
-
-pm2 start src/server.js --name bmi-backend --env production
-pm2 save
-sudo env PATH="$PATH:/usr/bin" pm2 startup systemd -u root --hp /root
-```
-Verify: `curl http://localhost:3000/health`. Note this instance's **private IP** — needed on the frontend instance below.
-
-**On the Frontend instance:**
-```bash
-BACKEND_HOST="<backend-private-ip>"
-
-sudo apt-get install -y nginx
-
-cd /opt/bmi-app/frontend
-npm ci
-npm run build
-
-sudo mkdir -p /var/www/bmi-app/dist
-sudo cp -r dist/. /var/www/bmi-app/dist/
-
-sudo rm -f /etc/nginx/sites-enabled/default
-cat <<NGINXEOF | sudo tee /etc/nginx/sites-available/bmi-app
-server {
-    listen 80 default_server;
-    server_name _;
-    root  /var/www/bmi-app/dist;
-    index index.html;
-
-    location / {
-        try_files \$uri \$uri/ /index.html;
-    }
-    location /api/ {
-        proxy_pass         http://${BACKEND_HOST}:3000;
-        proxy_http_version 1.1;
-        proxy_set_header   Host              \$host;
-        proxy_set_header   X-Real-IP         \$remote_addr;
-        proxy_set_header   X-Forwarded-For   \$proxy_add_x_forwarded_for;
-        proxy_set_header   X-Forwarded-Proto \$scheme;
-    }
-    location /health {
-        proxy_pass http://${BACKEND_HOST}:3000/health;
-    }
-}
-NGINXEOF
-
-sudo ln -sf /etc/nginx/sites-available/bmi-app /etc/nginx/sites-enabled/bmi-app
-sudo nginx -t
-sudo systemctl restart nginx
-```
-Verify: open `http://<frontend-public-ip>/` in a browser.
-
----
-
-### Case 3 — Multi-server, public IP + domain
-
-Same as **Case 2**, but a domain's DNS A record must already point at the frontend instance's public IP, and the frontend SG must also allow 443.
-
-Run the **DB instance** and **Backend instance** steps exactly as in Case 2. For the **Frontend instance**, use this variant:
-
-```bash
-BACKEND_HOST="<backend-private-ip>"
-DOMAIN="yourdomain.com"
-
-sudo apt-get install -y nginx certbot python3-certbot-nginx
-
-cd /opt/bmi-app/frontend
-npm ci
-npm run build
-
-sudo mkdir -p /var/www/bmi-app/dist
-sudo cp -r dist/. /var/www/bmi-app/dist/
-
-sudo rm -f /etc/nginx/sites-enabled/default
-cat <<NGINXEOF | sudo tee /etc/nginx/sites-available/bmi-app
-server {
-    listen 80 default_server;
-    server_name ${DOMAIN};
-    root  /var/www/bmi-app/dist;
-    index index.html;
-
-    location / {
-        try_files \$uri \$uri/ /index.html;
-    }
-    location /api/ {
-        proxy_pass         http://${BACKEND_HOST}:3000;
-        proxy_http_version 1.1;
-        proxy_set_header   Host              \$host;
-        proxy_set_header   X-Real-IP         \$remote_addr;
-        proxy_set_header   X-Forwarded-For   \$proxy_add_x_forwarded_for;
-        proxy_set_header   X-Forwarded-Proto \$scheme;
-    }
-    location /health {
-        proxy_pass http://${BACKEND_HOST}:3000/health;
-    }
-}
-NGINXEOF
-
-sudo ln -sf /etc/nginx/sites-available/bmi-app /etc/nginx/sites-enabled/bmi-app
-sudo nginx -t
-sudo systemctl restart nginx
-
-sudo certbot --nginx -d "${DOMAIN}" --agree-tos -m you@example.com --redirect --non-interactive
-```
-Verify: open `https://yourdomain.com/` in a browser, and check `pm2 status` on the backend instance.
 
 ---
 
